@@ -1,9 +1,10 @@
 import { capsule, mutation, query, string, table } from "lakebed/server";
 
 // The entire backend for the ladybug crawling on the page.
-// One shared row holds its position (x%, y%). Everyone sees the same row,
-// so everyone sees the bug in the same spot. A click writes a new position
-// and every subscribed client re-renders — no sockets, no events, no loops.
+// ONE shared row holds her spot as a CONTENT anchor: x = the index of a content section, y = "fx,fy"
+// (a fractional offset within that section). Anchoring to content — not raw x%/y% of the page — means
+// every client resolves the same section and lands her on the same content, so desktop and mobile
+// sync from one row regardless of resolution/shape. A click writes a new anchor; everyone re-renders.
 export default capsule({
   name: "Howto",
   schema: {
@@ -15,12 +16,13 @@ export default capsule({
   mutations: {
     move: mutation((ctx, to: string) => {
       const p = JSON.parse(to || "{}");
-      const key = p.key === "mobile" ? "mobile" : "desktop";  // separate coords per device class
-      const x = String(Math.max(3, Math.min(96, Number(p.x))));
-      const y = String(Math.max(4, Math.min(94, Number(p.y))));
-      const row = ctx.db.bug.all().find((b) => b.key === key);
-      if (row) ctx.db.bug.update(row.id, { x, y });
-      else ctx.db.bug.insert({ key, x, y });
+      const i = String(Math.max(0, Math.round(Number(p.i) || 0)));   // section index
+      const fx = Math.max(0.05, Math.min(0.95, Number(p.fx)));
+      const fy = Math.max(0.05, Math.min(0.95, Number(p.fy)));
+      const y = `${fx.toFixed(4)},${fy.toFixed(4)}`;
+      const row = ctx.db.bug.all().find((b) => b.key === "bug");
+      if (row) ctx.db.bug.update(row.id, { x: i, y });
+      else ctx.db.bug.insert({ key: "bug", x: i, y });
     }),
   },
 });

@@ -23,6 +23,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',
 .reveal:nth-child(1){animation-delay:.05s}.reveal:nth-child(2){animation-delay:.16s}.reveal:nth-child(3){animation-delay:.27s}.reveal:nth-child(4){animation-delay:.38s}.reveal:nth-child(5){animation-delay:.49s}
 @keyframes fadeUp{to{opacity:1;transform:none}}
 .nlink{position:relative;text-decoration:none;color:var(--ink);font-family:'Space Mono';font-size:12.5px}
+.lk-link{color:var(--ink);text-decoration:none;border-bottom:2px solid var(--accent);transition:border-color .15s}
+.lk-link:hover{border-color:var(--accent2)}
 .nlink::after{content:'';position:absolute;left:0;bottom:-4px;height:2px;width:0;background:var(--accent2);transition:width .2s ease}
 .nlink:hover::after{width:100%}
 .cta{display:inline-block;font-family:'Space Mono';font-weight:700;font-size:12.5px;background:var(--accent);color:var(--ink);border:1.5px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:8px 13px;text-decoration:none;transition:transform .14s ease,box-shadow .14s ease}
@@ -34,7 +36,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',
 .code .dot{width:10px;height:10px;border-radius:50%;background:var(--accent)}
 .code pre{margin:0;padding:15px 16px;overflow-x:auto;font-size:12.5px;line-height:1.62}
 .kick{font-family:'Space Mono';font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);background:var(--accent);display:inline-block;padding:3px 9px;border:1.5px solid var(--ink)}
-.vtable{width:100%;border-collapse:collapse;border:1.5px solid var(--ink);font-size:13.5px;min-width:720px}
+.vtable{width:100%;border-collapse:collapse;border:1.5px solid var(--ink);font-size:14px;min-width:520px}
 .vtable th,.vtable td{border:1.5px solid var(--ink);padding:11px 15px;text-align:left;vertical-align:top}
 .vtable thead th{background:#e6e3d8;font-family:'Space Mono';font-weight:700}
 .vtable td:first-child{font-family:'Space Mono';font-size:12.5px;color:var(--muted)}
@@ -88,47 +90,54 @@ function Ladybug() {
    (the `bug` row) plus the wall clock — so every client computes the exact same spot at the
    same instant and stays in sync without any per-client randomness. it ambles slowly on its
    own; a click writes a new shared coordinate and everyone's bug relocates together. ----- */
+// the bug's spot is stored as (anchor-section index, fx, fy) — a fraction WITHIN a content section,
+// not an x%/y% of the raw page. every client resolves the same section's live box and places her at
+// the same content spot, so desktop and mobile sync in ONE shared row regardless of resolution/shape.
+const BUG_ANCHORS = "section[id]";
 function Bug() {
   const rows = useQuery<{ key: string; x: string; y: string }[]>("bug");
   const move = useMutation<[string], void>("move");
-  // desktop and mobile are different-shaped pages, so each keeps its OWN shared row — desktop
-  // viewers stay in sync with desktop, mobile with mobile.
-  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
-  useEffect(() => {
-    const onR = () => setIsMobile(window.innerWidth < 760);
-    window.addEventListener("resize", onR);
-    return () => window.removeEventListener("resize", onR);
-  }, []);
-  const key = isMobile ? "mobile" : "desktop";
-  const row = rows.find((r) => r.key === key);
-  const ax = row ? Number(row.x) : (isMobile ? 60 : 70);
-  const ay = row ? Number(row.y) : (isMobile ? 12 : 9);
+  const row = rows.find((r) => r.key === "bug");
+  const idx = row ? Math.max(0, Math.round(Number(row.x))) : 0;
+  const fp = row ? row.y.split(",").map(Number) : [0.5, 0.42];
+  const FX = isFinite(fp[0]) ? fp[0] : 0.5, FY = isFinite(fp[1]) ? fp[1] : 0.42;
+
   const wrap = useRef<HTMLDivElement>(null);
-  const disp = useRef({ x: ax, y: ay });   // the anchor the amble renders around (lags the shared
-                                           // anchor during the burrow so she sinks before relocating)
+  const disp = useRef({ i: idx, fx: FX, fy: FY });  // the anchor she renders around (lags during the burrow)
   const init = useRef(false);
+  const head = useRef(0);
   const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
 
-  // continuous deterministic amble. the anchor (disp) is a % position ON THE PAGE (document, not
-  // viewport — so you scroll past her); the amble itself is a small PIXEL wiggle around it, so she
-  // stays in her spot rather than roaming the whole 5000px page. all derived from shared anchor + clock.
+  // continuous deterministic crawl, but everything is expressed in the anchor SECTION's own
+  // coordinate space (fractions of its box). because the section is the same content on every
+  // device, the whole path stays on that content — it just looks a little squished/stretched where
+  // the section is a different shape. base + wander are both fractional → resolved to px per client.
   useEffect(() => {
-    const w1 = 0.2, w2 = 0.13, Ax = 20, Bx = 10, Ay = 17, By = 9;  // amble amplitude in PIXELS
     let raf = 0;
+    const A = 0.17;                              // wander amplitude, as a fraction of the section
     const tick = () => {
       const el = wrap.current;
-      if (el) {
-        const a = disp.current;
-        const seed = (a.x * 1.3 + a.y * 0.7) % 6.283;  // shared (derived from the shared anchor)
-        const t = Date.now() / 1000;               // the shared clock — same for every client
-        const dx = Ax * Math.sin(t * w1 + seed) + Bx * Math.sin(t * w2 * 1.7 + seed * 2.1);
-        const dy = Ay * Math.cos(t * w1 * 0.9 + seed * 1.3) + By * Math.sin(t * w2 + seed);
-        const vx = Ax * w1 * Math.cos(t * w1 + seed) + Bx * w2 * 1.7 * Math.cos(t * w2 * 1.7 + seed * 2.1);
-        const vy = -Ay * w1 * 0.9 * Math.sin(t * w1 * 0.9 + seed * 1.3) + By * w2 * Math.cos(t * w2 + seed);
-        const h = Math.atan2(vy, vx) * 180 / Math.PI + 90;
-        el.style.left = a.x + "%";
-        el.style.top = a.y + "%";
-        el.style.transform = `translate(-50%,-50%) translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${h.toFixed(1)}deg)`;
+      if (!el) { raf = requestAnimationFrame(tick); return; }
+      const els = document.querySelectorAll<HTMLElement>(BUG_ANCHORS);
+      const anchor = els[Math.min(disp.current.i, els.length - 1)];
+      const parent = el.offsetParent as HTMLElement | null;   // the positioned .page
+      if (anchor && parent) {
+        const b = anchor.getBoundingClientRect(), pr = parent.getBoundingClientRect();
+        const left0 = b.left - pr.left, top0 = b.top - pr.top;   // section box, in .page coords (scroll-independent)
+        const k = disp.current.i * 2.3 + disp.current.fx * 3.7 + disp.current.fy * 1.9;  // shared logical seed
+        const t = Date.now() / 1000 * 1.9;       // shared clock, sped up ~2x
+        const wx = A * Math.sin(0.37 * t + k) + 0.5 * A * Math.sin(0.91 * t + k * 1.7);
+        const wy = A * Math.sin(0.29 * t + k * 1.3) + 0.5 * A * Math.sin(0.74 * t + k * 0.6);
+        const vx = b.width * (A * 0.37 * Math.cos(0.37 * t + k) + 0.5 * A * 0.91 * Math.cos(0.91 * t + k * 1.7));
+        const vy = b.height * (A * 0.29 * Math.cos(0.29 * t + k * 1.3) + 0.5 * A * 0.74 * Math.cos(0.74 * t + k * 0.6));
+        const target = Math.atan2(vy, vx) * 180 / Math.PI + 90;  // face actual on-screen travel
+        const d = ((target - head.current + 540) % 360) - 180;
+        head.current += d * 0.14;
+        const px = left0 + (disp.current.fx + wx) * b.width;
+        const py = top0 + (disp.current.fy + wy) * b.height;
+        el.style.left = px.toFixed(1) + "px";
+        el.style.top = py.toFixed(1) + "px";
+        el.style.transform = `translate(-50%,-50%) rotate(${head.current.toFixed(1)}deg)`;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -136,24 +145,24 @@ function Bug() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // when the SHARED anchor changes: burrow out here, reposition underground, pop up at the new
-  // spot. driven by the shared row so every client plays it together.
+  // when the SHARED anchor changes: burrow out, move underground, pop up at the new content spot.
   useEffect(() => {
     if (!row) return;
-    if (!init.current) { init.current = true; disp.current = { x: ax, y: ay }; return; }  // baseline, no anim
+    if (!init.current) { init.current = true; disp.current = { i: idx, fx: FX, fy: FY }; return; }
     setPhase("out");
-    const t1 = setTimeout(() => { disp.current = { x: ax, y: ay }; setPhase("in"); }, 300);  // move while hidden
+    const t1 = setTimeout(() => { disp.current = { i: idx, fx: FX, fy: FY }; setPhase("in"); }, 300);
     const t2 = setTimeout(() => setPhase("idle"), 660);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [ax, ay, key, !!row]);
+  }, [idx, FX, FY, !!row]);
 
   function swat(e: any) {
     e.stopPropagation(); e.preventDefault();
-    move(JSON.stringify({ key, x: 6 + Math.random() * 86, y: 6 + Math.random() * 86 }));  // anywhere on the page
+    const n = document.querySelectorAll(BUG_ANCHORS).length || 1;
+    move(JSON.stringify({ i: Math.floor(Math.random() * n), fx: 0.12 + Math.random() * 0.76, fy: 0.14 + Math.random() * 0.72 }));
   }
   return (
     <div ref={wrap} class="bug-wrap" onClick={swat} title="catch me"
-      style={{ position: "absolute", left: `${ax}%`, top: `${ay}%`, transform: "translate(-50%,-50%)", zIndex: 45, cursor: "pointer", filter: "drop-shadow(0 5px 5px rgba(0,0,0,0.28))" }}>
+      style={{ position: "absolute", left: 0, top: 0, transform: "translate(-50%,-50%)", zIndex: 45, cursor: "pointer", filter: "drop-shadow(0 5px 5px rgba(0,0,0,0.28))" }}>
       <div class={"bug-anim" + (phase === "out" ? " bug-burrow" : phase === "in" ? " bug-emerge" : "")}>
         <Ladybug />
       </div>
@@ -191,7 +200,243 @@ function Section({ id, n, kicker, title, children }: any) {
   );
 }
 
+const PROMPT = `You're in a fresh Linux sandbox. Build and deploy a small full-stack app on Lakebed — a runtime where ONE "capsule" bundles a Preact client + server + database and ships to a live URL with NO account.
+
+1) Scaffold:  npx -y lakebed@0.0.25 new myapp && cd myapp
+2) The server is one capsule() — queries take no args, mutations take args:
+     import { capsule, mutation, query, string, table } from "lakebed/server";
+     export default capsule({
+       name: "MyApp",
+       schema: { items: table({ text: string() }) },
+       queries:   { items: query((ctx) => ctx.db.items.all()) },
+       mutations: { add: mutation((ctx, text) => ctx.db.items.insert({ text })) },
+     });
+   Client: useQuery("items") is live; useMutation("add") writes.
+3) Anonymous deploys run an interpreted subset, so keep the server: SYNCHRONOUS
+   (no async/await), no fetch, no secrets/env, no timers, no loops (use
+   map/filter/find), state under ~1MB, no file storage.
+4) Deploy with no login:  npx -y lakebed@0.0.25 deploy   → give me the live URL.
+
+App I want: DESCRIBE YOUR APP HERE — e.g. "a shared to-do list everyone edits live".`;
+
+function PromptBlock() {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div style={{ border: "1.5px solid var(--ink)", boxShadow: "6px 6px 0 var(--accent)", background: "#16150f" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", borderBottom: "1.5px solid #2c2a20", background: "#1c1a12" }}>
+        <span class="mono" style={{ fontSize: 12, color: "#b7b59f" }}>paste this into your coding agent</span>
+        <button class="mono" onClick={() => { try { navigator.clipboard?.writeText(PROMPT); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {} }}
+          style={{ fontFamily: "'Space Mono', monospace", fontSize: 11.5, fontWeight: 700, background: "var(--accent)", color: "var(--ink)", border: "none", padding: "4px 11px", cursor: "pointer" }}>{copied ? "copied ✓" : "copy"}</button>
+      </div>
+      <pre class="mono" style={{ margin: 0, padding: "15px 16px", overflowX: "auto", fontSize: 12, lineHeight: 1.6, color: "#e9e7da", whiteSpace: "pre-wrap" }}>{PROMPT}</pre>
+    </div>
+  );
+}
+
+/* ---- interactive stack comparison — teaches CONTAINMENT: separate networked services with your
+   data "in another building" vs everything nested inside one running box with the data in memory ---- */
+const STACKS: any = {
+  conventional: {
+    label: "Conventional", sub: "Vercel + a pile of services",
+    front: "your React app", frontHost: "hosted on Vercel",
+    wire: "your app + Vercel functions call each service over the network",
+    contained: false,
+    glue: "your code", glueWhere: "runs in the browser + Vercel's edge functions",
+    services: [
+      { l: "Supabase", s: "database" }, { l: "Pusher", s: "realtime" },
+      { l: "Clerk", s: "auth", edge: true }, { l: "Stripe", s: "payments", edge: true }, { l: "an AI API", s: "the model", edge: true },
+    ],
+    takeaway: "five separate products from five companies — you wire them together, and you keep them working",
+    runsOn: "each company's own servers (mostly AWS)",
+    lines: 6, codeNote: "two services that don't know each other — Clerk hands you an id, you carry it to Supabase yourself.",
+    codeFile: "their own notes · Clerk + Supabase",
+    code: `import { auth } from "@clerk/nextjs/server";
+
+const { userId } = await auth();            // Clerk: who is this?
+if (!userId) return <SignIn />;             // gate it
+
+const { data: notes } = await supabase      // Supabase: their rows
+  .from("notes").select("*").eq("user_id", userId);`,
+  },
+  lakebed: {
+    label: "Lakebed", sub: "unified full-stack",
+    front: "your Preact UI", frontHost: "compiled in",
+    contained: true, boxLabel: "one Lakebed capsule · a single running program",
+    unifiedNote: "frontend and backend are literally the same program — that's the whole idea",
+    services: [
+      { l: "server", s: "reads + writes" }, { l: "database", s: "in memory" }, { l: "auth", s: "built in" },
+    ],
+    takeaway: "one running program from one company — nothing to wire together",
+    runsOn: "Railway · one region",
+    lines: 2, codeNote: "auth and the database are the same program, so the query just knows the caller. nothing to pass.",
+    codeFile: "their own notes · Lakebed",
+    code: `// the server query already knows who's calling — no id to pass around
+notes: query((ctx) =>
+  ctx.db.notes.where("ownerId", ctx.auth.userId).all()),
+
+// client — empty when signed out:
+const notes = useQuery("notes");`,
+  },
+  somewhere: {
+    label: "somewhere.tech", sub: "unified full-stack", link: "https://somewhere.tech",
+    front: "your frontend", frontHost: "served by somewhere",
+    contained: true, boxLabel: "one somewhere platform",
+    unifiedNote: "frontend + the unified backend on one platform — one client SDK between them",
+    services: [
+      { l: "auth" }, { l: "database" }, { l: "AI" }, { l: "payments" }, { l: "storage" }, { l: "realtime" },
+    ],
+    takeaway: "one service for the entire backend — auth, database, AI, payments, storage, realtime",
+    runsOn: "Cloudflare · a unified edge network",
+    lines: 5, codeNote: "one client for auth and data — still pass the id, but there's no second vendor to wire.",
+    codeFile: "their own notes · somewhere",
+    code: `const { data: { user } } = await client.auth.getUser();
+if (!user) return <SignIn />;               // gate it
+
+const { data: notes } = await client        // one client: auth + db
+  .from("notes").select("*").eq("user_id", user.id);`,
+  },
+};
+
+function StackTabs({ mode, setMode }: any) {
+  return (
+    <div style={{ display: "flex", border: "1.5px solid var(--ink)", background: "var(--surface)" }}>
+      {["conventional", "lakebed", "somewhere"].map((m, i) => (
+        <button key={m} onClick={() => setMode(m)} class="mono"
+          style={{ flex: 1, padding: "10px 6px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", border: "none", borderRight: i < 2 ? "1.5px solid var(--ink)" : "none", background: mode === m ? "var(--accent)" : "transparent", color: "var(--ink)", textAlign: "center" }}>
+          {STACKS[m].label}
+          <span style={{ display: "block", fontWeight: 400, fontSize: 9.5, color: "var(--muted)", marginTop: 2 }}>{STACKS[m].sub}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Chip({ label, sub, data }: any) {
+  return (
+    <div style={{ minWidth: 62, padding: "7px 10px", textAlign: "center", border: "1.5px solid var(--ink)", background: data ? "#dff0a8" : "var(--bg)", flexShrink: 0 }}>
+      <div class="mono" style={{ fontSize: 10.5, fontWeight: 700, lineHeight: 1.15 }}>{label}</div>
+      {sub && <div style={{ fontSize: 8.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.1 }}>{sub}</div>}
+      {data && <div class="mono" style={{ fontSize: 8.5, color: "#7a5b00", marginTop: 3, fontWeight: 700 }}>★ your data</div>}
+    </div>
+  );
+}
+
+const BandLabel = ({ t, ink }: any) => <div class="mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", color: ink ? "var(--ink)" : "var(--muted)", marginBottom: 9 }}>{t}</div>;
+
+// the diagram as a SHAPE: conventional = one app wired out to separate boxes; unified = the same
+// pieces inside one box. SAME box sizes, fonts and orthogonal (right-angle) connectors across all
+// three so they read as one family — only the enclosure + the Vercel-black nodes differ.
+const SC = { CW: 98, CH: 56, FW: 184, FH: 46, TF: 12.5, SF: 9, TTL: 13 };  // shared sizes/fonts
+function StackScene({ s }: any) {
+  const ink = "var(--ink)", muted = "var(--muted)", bg = "var(--bg)", surf = "var(--surface)";
+  const F = "'Space Mono', monospace";
+  const { CW, CH, FW, FH, TF, SF, TTL } = SC;
+  const svgStyle = { width: "100%", height: "auto", display: "block", maxWidth: 600, margin: "0 auto" } as any;
+  const cell = (x: number, y: number, p: any) => (
+    <g key={p.l + "_" + x}>
+      <rect x={x - CW / 2} y={y} width={CW} height={CH} fill={surf} stroke={ink} stroke-width="1.5" />
+      <text x={x} y={p.s ? y + CH / 2 - 1 : y + CH / 2 + 4} text-anchor="middle" font-family={F} font-size={TF} font-weight="700" fill={ink}>{p.l}</text>
+      {p.s && <text x={x} y={y + CH / 2 + 13} text-anchor="middle" font-family={F} font-size={SF} fill={muted}>{p.s}</text>}
+    </g>
+  );
+  if (!s.contained) {
+    const cx = [60, 170, 280, 390, 500], srvY = 236, busY = 92;
+    const nDirect = s.services.filter((p: any) => !p.edge).length;
+    const eCx = cx.slice(nDirect);
+    const eMin = Math.min(...eCx), eMax = Math.max(...eCx);
+    const enx = (eMin + eMax) / 2;                                         // edge-node center
+    const busRight = Math.max(cx[nDirect - 1], enx);
+    const railY = 180;
+    return (
+      <svg viewBox="0 0 560 308" style={svgStyle} role="img" aria-label="your frontend wired separately to each service; the secret-key ones go through a Vercel edge function">
+        {/* orthogonal wiring only — no diagonals */}
+        <line x1="280" y1={16 + FH} x2="280" y2={busY} stroke={ink} stroke-width="1.5" />
+        <line x1={cx[0]} y1={busY} x2={busRight} y2={busY} stroke={ink} stroke-width="1.5" />
+        {cx.slice(0, nDirect).map((x, i) => <line key={"d" + i} x1={x} y1={busY} x2={x} y2={srvY} stroke={ink} stroke-width="1.5" />)}
+        <line x1={enx} y1={busY} x2={enx} y2="120" stroke={ink} stroke-width="1.5" />
+        <line x1={enx} y1="158" x2={enx} y2={railY} stroke={ink} stroke-width="1.5" />
+        {eMin !== eMax && <line x1={eMin} y1={railY} x2={eMax} y2={railY} stroke={ink} stroke-width="1.5" />}
+        {eCx.map((x, i) => <line key={"e" + i} x1={x} y1={railY} x2={x} y2={srvY} stroke={ink} stroke-width="1.5" />)}
+        {/* frontend, on Vercel (black ▲ mark = Vercel's own design language) */}
+        <rect x={280 - FW / 2} y="16" width={FW} height={FH} fill={bg} stroke={ink} stroke-width="1.5" />
+        <text x="280" y="37" text-anchor="middle" font-family={F} font-size={TTL} font-weight="700" fill={ink}>{s.front}</text>
+        <polygon points="250,53 258,42 266,53" fill={ink} />
+        <text x="296" y="52" text-anchor="middle" font-family={F} font-size="9.5" font-weight="700" fill={ink}>Vercel</text>
+        {/* the black Vercel Edge node — your server code + secret keys live here */}
+        <rect x={enx - 67} y="120" width="134" height="38" fill={ink} />
+        <text x={enx} y="136" text-anchor="middle" font-family={F} font-size="11" font-weight="700" fill="#e9e7da">Vercel Edge fn</text>
+        <text x={enx} y="150" text-anchor="middle" font-family={F} font-size="8.5" fill="#b7b59f">your secret keys</text>
+        {s.services.map((p: any, i: number) => cell(cx[i], srvY, p))}
+      </svg>
+    );
+  }
+  const n = s.services.length, per = 3, rows = Math.ceil(n / per);
+  const gx = 14, gy = 14, gridTop = 122;
+  const gridBottom = gridTop + rows * CH + (rows - 1) * gy;
+  const boxBottom = gridBottom + 16, boxH = boxBottom - 14, vbH = boxBottom + 12;
+  return (
+    <svg viewBox={`0 0 560 ${vbH}`} style={svgStyle} role="img" aria-label="frontend and backend together inside one box">
+      <rect x="100" y="14" width="360" height={boxH} fill="#eef3d2" stroke={ink} stroke-width="2.5" />
+      <rect x="100" y="14" width="360" height="26" fill="var(--accent)" stroke={ink} stroke-width="1.5" />
+      <text x="280" y="31" text-anchor="middle" font-family={F} font-size="11" font-weight="700" fill={ink}>{s.boxLabel}</text>
+      <rect x={280 - FW / 2} y="52" width={FW} height={FH} fill={bg} stroke={ink} stroke-width="1.5" />
+      <text x="280" y="73" text-anchor="middle" font-family={F} font-size={TTL} font-weight="700" fill={ink}>{s.front}</text>
+      <text x="280" y="87" text-anchor="middle" font-family={F} font-size={SF} fill={muted}>{s.frontHost}</text>
+      <line x1="280" y1={52 + FH} x2="280" y2={gridTop} stroke={ink} stroke-width="1.5" />
+      {s.services.map((p: any, i: number) => {
+        const r = Math.floor(i / per), inRow = Math.min(per, n - r * per), c = i % per;
+        const rowW = inRow * CW + (inRow - 1) * gx, x = 280 - rowW / 2 + CW / 2 + c * (CW + gx), y = gridTop + r * (CH + gy);
+        return cell(x, y, p);
+      })}
+    </svg>
+  );
+}
+
+function StackDiagram({ mode, setMode }: any) {
+  const s = STACKS[mode];
+  return (
+    <div>
+      <StackTabs mode={mode} setMode={setMode} />
+      <div style={{ marginTop: 18, border: "1.5px solid var(--ink)", background: "var(--surface)", boxShadow: "6px 6px 0 var(--ink)", textAlign: "center" }}>
+        <div style={{ padding: "22px 18px 16px" }}>
+          <StackScene s={s} />
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 14, maxWidth: 560, marginLeft: "auto", marginRight: "auto", lineHeight: 1.45 }}>
+            {s.contained
+              ? s.unifiedNote
+              : <>You call <b style={{ color: "var(--ink)" }}>Supabase</b> and Pusher straight from the browser; auth and the secret-key services (<b style={{ color: "var(--ink)" }}>Clerk</b>, <b style={{ color: "var(--ink)" }}>Stripe</b>, the AI API) run through a <b style={{ color: "var(--ink)" }}>Vercel</b> edge function. Five companies you wire together and keep in sync.</>}
+          </div>
+        </div>
+        {/* IN PLAIN TERMS — the takeaway (how it's set up, not where data lives) */}
+        <div style={{ padding: "14px 18px", borderTop: "1.5px solid var(--ink)", background: "var(--accent)" }}>
+          <BandLabel t="IN PLAIN TERMS" ink />
+          <div class="mono" style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.45, color: "var(--ink)" }}>{s.takeaway}</div>
+        </div>
+        {/* RUNS ON */}
+        <div class="mono" style={{ padding: "11px 18px", borderTop: "1.5px solid var(--ink)", fontSize: 10.5, color: "var(--muted)", display: "flex", justifyContent: "center", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span>▸ the servers are run by <b style={{ color: "var(--ink)" }}>{s.runsOn}</b></span>
+          {s.link && <a class="lk-link" href={s.link} target="_blank" rel="noreferrer" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11.5 }}>somewhere.tech ↗</a>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StackCode({ mode, setMode }: any) {
+  const s = STACKS[mode];
+  return (
+    <div>
+      <StackTabs mode={mode} setMode={setMode} />
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", margin: "16px 0 14px" }}>
+        <span class="mono" style={{ fontSize: 12.5, fontWeight: 700, border: "1.5px solid var(--ink)", padding: "4px 10px", background: s.lines <= 2 ? "var(--accent)" : "var(--surface)" }}>~{s.lines} lines</span>
+        <span style={{ fontSize: 13.5, color: "var(--muted)", flex: 1, minWidth: 220 }}>{s.codeNote}</span>
+      </div>
+      <Code file={s.codeFile} code={s.code} />
+    </div>
+  );
+}
+
 export function App() {
+  const [stackMode, setStackMode] = useState("conventional");  // shared by the diagram (§04) and the code (§05)
   useEffect(() => {
     const ic = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='#efece1'/><rect x='5' y='5' width='22' height='22' fill='#c8f135' stroke='#16150f' stroke-width='2'/></svg>`);
     let l = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
@@ -220,14 +465,16 @@ export function App() {
           <strong class="mono" style={{ fontSize: 14.5, letterSpacing: "-0.01em" }}>lakebed/build</strong>
         </div>
         <div class="nav-links" style={{ marginLeft: "auto", display: "flex", gap: 20 }}>
+          <a class="nlink" href="#try">try it</a>
           <a class="nlink" href="#capsule">capsule</a>
-          <a class="nlink" href="#build">build</a>
-          <a class="nlink" href="#rpc">rpc</a>
           <a class="nlink" href="#realtime">realtime</a>
-          <a class="nlink" href="#vs">vs vercel</a>
+          <a class="nlink" href="#stack">stack</a>
+          <a class="nlink" href="#auth">auth</a>
+          <a class="nlink" href="#fit">fit</a>
+          <a class="nlink" href="#draw">draw</a>
           <a class="nlink" href="#edges">edges</a>
         </div>
-        <a class="cta" style={{ marginLeft: 8 }} href="https://www.npmjs.com/package/lakebed" target="_blank" rel="noreferrer">get started →</a>
+        <a class="cta" style={{ marginLeft: 8 }} href="#try">try it →</a>
       </nav>
 
       {/* hero — asymmetric 2fr/1fr */}
@@ -272,97 +519,78 @@ $ npx lakebed deploy
       <div class="marq">
         <div class="marq-track">
           {Array.from({ length: 2 }).map((_, i) => (
-            <span key={i}>&nbsp;BUILD ON LAKEBED&nbsp; ✦ &nbsp;ONE FILE&nbsp; ✦ &nbsp;RPC NOT REST&nbsp; ✦ &nbsp;REALTIME BY DEFAULT&nbsp; ✦ &nbsp;DEPLOY BEFORE YOU SIGN UP&nbsp; ✦ </span>
+            <span key={i}>&nbsp;BUILD ON LAKEBED&nbsp; ✦ &nbsp;ONE LIVING PROGRAM&nbsp; ✦ &nbsp;SHIP FROM A CHAT&nbsp; ✦ &nbsp;REALTIME BY DEFAULT&nbsp; ✦ &nbsp;DEPLOY BEFORE YOU SIGN UP&nbsp; ✦ </span>
           ))}
         </div>
       </div>
 
-      {/* 01 capsule */}
-      <Section id="capsule" n="01" kicker="The unit" title="What's a capsule?">
-        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 720, marginTop: 0 }}>
-          A capsule is one deployable unit that holds the whole app: the <b style={{ color: "var(--ink)" }}>client</b> you see, the <b style={{ color: "var(--ink)" }}>server</b> functions behind it, and the <b style={{ color: "var(--ink)" }}>database</b> they read and write. It compiles to a single bundle and serves from a single URL over a WebSocket. No "frontend repo + backend repo + database service" — it's all the same thing.
+      {/* 01 try it — the hook */}
+      <Section id="try" n="01" kicker="Zero setup" title="Try it in a chat — no install, no signup">
+        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 780, marginTop: 0 }}>
+          Coding agents like <b style={{ color: "var(--ink)" }}>Claude</b> run in a throwaway Linux sandbox — <code class="ic">npx</code> works, and because Lakebed deploys <b style={{ color: "var(--ink)" }}>anonymously</b>, the agent can scaffold a capsule and ship it to a live URL without you signing into anything. Paste this, then tell it what to build:
         </p>
-        <div class="two" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 26 }}>
-          {[
-            ["client", "Your Preact UI. Talks to the server through typed hooks — not HTTP."],
-            ["server", "queries (reads) + mutations (writes). Plain functions you call by name."],
-            ["database", "Built in. ctx.db.<table>.all() / insert / update — no connection string."],
-            ["auth", "ctx.auth on the server, useAuth() on the client. Google + guest, no setup."],
-          ].map(([h, b]) => (
-            <div class="hardcard" key={h} style={{ padding: 18 }}>
-              <div class="mono" style={{ fontSize: 15, fontWeight: 700, marginBottom: 7 }}><span style={{ color: "var(--accent2)" }}>{">"}</span> {h}</div>
-              <div style={{ color: "var(--muted)", fontSize: 14.5 }}>{b}</div>
-            </div>
-          ))}
+        <div style={{ marginTop: 18, maxWidth: 820 }}>
+          <PromptBlock />
+        </div>
+        <div style={{ marginTop: 18, maxWidth: 780, border: "1.5px solid var(--ink)", background: "var(--ink)", color: "#e9e7da", padding: "13px 16px" }}>
+          <span class="mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>TIP · no build step</span>
+          <p style={{ fontSize: 13.5, margin: "7px 0 0", color: "#cfcdbf" }}>
+            Deploy raw source — <code class="ic" style={{ background: "#2c2a20", color: "#e9e7da" }}>lakebed deploy</code> compiles it for you; don't bundle first. To catch a typo before deploying, a quick <code class="ic" style={{ background: "#2c2a20", color: "#e9e7da" }}>npx esbuild client/index.tsx</code> flags syntax errors locally — though it won't catch the anonymous-runtime limits below (no <code class="ic" style={{ background: "#2c2a20", color: "#e9e7da" }}>async</code>/<code class="ic" style={{ background: "#2c2a20", color: "#e9e7da" }}>fetch</code>/loops); only the deploy does.
+          </p>
+        </div>
+        <div style={{ marginTop: 18, maxWidth: 780, border: "1.5px solid var(--ink)", borderLeft: "5px solid var(--accent)", background: "var(--surface)", padding: "16px 18px" }}>
+          <div class="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>What an anonymous deploy can't do <span style={{ color: "var(--muted)", fontWeight: 400 }}>(until you claim it)</span></div>
+          <p style={{ fontSize: 14.5, color: "var(--muted)", margin: "10px 0 0" }}>
+            The server runs as an interpreted subset, so keep it <b style={{ color: "var(--ink)" }}>synchronous</b> — no <code class="ic">async/await</code>, no outbound <code class="ic">fetch</code>, no secrets/<code class="ic">env</code>, no timers, no loops (use <code class="ic">map/filter/find</code>). Plus the usual capsule limits: ~1 MB state, no file storage, no npm, ~10k requests + 1k writes a day — and the deploy is <b style={{ color: "var(--ink)" }}>temporary, expiring after about a week</b>. <b style={{ color: "var(--ink)" }}>Claim it</b> (free, GitHub login) to keep the URL for good, run your real source bundle, and unlock async, fetch, and secrets.
+          </p>
         </div>
       </Section>
 
-      {/* 02 build */}
-      <Section id="build" n="02" kicker="Hands on" title="Build one in five minutes">
-        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 720, marginTop: 0 }}>Scaffold, run it locally, ship it. The first deploy doesn't even need an account.</p>
-        <div style={{ margin: "20px 0 26px" }}>
-          <Code file="terminal" code={`# 1 · scaffold a new capsule
-npx lakebed new guestbook
-cd guestbook
-
-# 2 · run it locally with hot reload
-npx lakebed dev
-
-# 3 · ship it — prints a live URL, no account required
-npx lakebed deploy
-
-# 4 · (later) attach the anonymous deploy to your account
-npx lakebed claim`} />
-        </div>
-        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 720 }}>The server is one <code class="ic">capsule()</code> call: a schema, some queries, some mutations.</p>
-        <div style={{ marginTop: 16 }}>
-          <Code file="server.ts" code={`import { capsule, mutation, query, string, table } from "lakebed/server";
+      {/* 02 capsule */}
+      <Section id="capsule" n="02" kicker="The unit" title="What's a capsule?">
+        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 760, marginTop: 0 }}>
+          Forget the word for a second. The normal way to ship an app is five separate things stitched over the network: a frontend host, stateless functions that boot and die, a database in another building, an auth service, a realtime service. A <b style={{ color: "var(--ink)" }}>capsule</b> is the opposite — <b style={{ color: "var(--ink)" }}>one program that stays running and holds your app's data in its own memory</b>. The server, the database, the auth aren't services it phones; they're parts of one living thing.
+        </p>
+        <div class="two" style={{ display: "grid", gridTemplateColumns: "minmax(0,300px) 1fr", gap: 22, marginTop: 26, alignItems: "start" }}>
+          <div>
+            {/* you → one URL → into the capsule */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div style={{ border: "1.5px solid var(--ink)", background: "var(--bg)", padding: "7px 11px", textAlign: "center", flexShrink: 0 }}>
+                <div class="mono" style={{ fontSize: 11, fontWeight: 700 }}>you</div>
+                <div style={{ fontSize: 8.5, color: "var(--muted)" }}>browser</div>
+              </div>
+              <div class="mono" style={{ fontSize: 9.5, color: "var(--muted)" }}>— one URL · one socket →</div>
+            </div>
+            <div style={{ border: "1.5px solid var(--ink)", boxShadow: "6px 6px 0 var(--accent)", background: "var(--surface)" }}>
+              <div class="mono" style={{ padding: "9px 14px", borderBottom: "1.5px solid var(--ink)", background: "var(--accent)", fontSize: 12.5, fontWeight: 700 }}>the capsule · one running program</div>
+              <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                {[["client", "the UI you see", false], ["server", "queries + mutations", false], ["database", "in memory — not another building", true], ["auth", "the signed-in user", false]].map(([h, s, d]: any) => (
+                  <div key={h} style={{ border: "1.5px solid var(--ink)", background: d ? "#dff0a8" : "var(--bg)", padding: "9px 12px" }}>
+                    <span class="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>{h}{d ? " ★" : ""}</span>
+                    <span style={{ fontSize: 11.5, color: "var(--muted)" }}> · {s}</span>
+                  </div>
+                ))}
+              </div>
+              <div class="mono" style={{ padding: "9px 14px", borderTop: "1.5px solid var(--ink)", fontSize: 10.5, color: "var(--muted)" }}>always running · data lives inside · realtime falls out for free</div>
+            </div>
+          </div>
+          <div>
+            <p style={{ fontSize: 15, color: "var(--muted)", margin: "0 0 12px" }}>And it's one <code class="ic">capsule()</code> call — a schema, the reads, the writes, in one file:</p>
+            <Code file="server.ts" code={`import { capsule, mutation, query, string, table } from "lakebed/server";
 
 export default capsule({
   name: "Guestbook",
-  schema: {
-    notes: table({ author: string(), body: string() }),
-  },
-  queries: {
-    // no args — the client subscribes to this by name
-    notes: query((ctx) => ctx.db.notes.all()),
-  },
-  mutations: {
-    sign: mutation((ctx, body: string) => {
-      ctx.db.notes.insert({ author: ctx.auth.userId, body });
-    }),
-  },
+  schema: { notes: table({ author: string(), body: string() }) },
+  queries:   { notes: query((ctx) => ctx.db.notes.all()) },
+  mutations: { sign: mutation((ctx, body) =>
+    ctx.db.notes.insert({ author: ctx.auth.userId, body })) },
 });`} />
+          </div>
         </div>
       </Section>
 
-      {/* 03 rpc */}
-      <Section id="rpc" n="03" kicker="The big idea" title="RPC, not REST">
-        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 720, marginTop: 0 }}>
-          You don't build endpoints. You call your server functions <b style={{ color: "var(--ink)" }}>by name</b> from the client, and the types flow straight through. No route files, no <code class="ic">fetch</code>, no request/response glue.
-        </p>
-        <div style={{ marginTop: 18 }}>
-          <Code file="client.tsx" code={`import { useQuery, useMutation } from "lakebed/client";
-
-export function App() {
-  const notes = useQuery("notes");      // live: re-renders on every write
-  const sign  = useMutation("sign");    // calls the server mutation by name
-
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); sign(e.currentTarget.body.value); }}>
-      <ul>{notes.map((n) => <li key={n.id}>{n.body}</li>)}</ul>
-      <input name="body" placeholder="leave a note…" />
-    </form>
-  );
-}`} />
-        </div>
-        <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 720, marginTop: 16 }}>
-          The usual stack needs a route handler, a <code class="ic">fetch</code> wrapper, a client cache (react-query/SWR), a zod schema, and a websocket layer for live updates — five things to keep in sync. Here it's two function names.
-        </p>
-      </Section>
-
-      {/* 04 realtime */}
-      <Section id="realtime" n="04" kicker="Live by default" title="Realtime isn't a feature — it's the default">
+      {/* 03 realtime */}
+      <Section id="realtime" n="03" kicker="Live by default" title="Realtime isn't a feature — it's the default">
         <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 720, marginTop: 0 }}>
           Every <code class="ic">useQuery</code> is a live subscription. When any mutation writes, every subscribed query re-runs and every client re-renders. The ladybug wandering around this page is exactly that — here's the whole backend behind her:
         </p>
@@ -381,55 +609,86 @@ const bug = useQuery("bug");        // one shared row; no sockets, no events`} /
         <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 720, marginTop: 16 }}>
           One row, shared by everyone. You write a new position; every subscriber's bug scurries there. No channels to open, no events to emit, no socket to reconnect.
         </p>
-      </Section>
-
-      {/* 05 positioning */}
-      <Section id="vs" n="05" kicker="Positioning" title="A different shape">
-        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 770, marginTop: 0 }}>
-          Lakebed is its own shape — one capsule, with the client, server, and database fused into a single deploy. For contrast: <b style={{ color: "var(--ink)" }}>Vercel</b> is the classic stack (host your frontend and functions, bring the backend yourself), and <b style={{ color: "var(--ink)" }}>somewhere.tech</b> is a Vercel-shaped platform with the backend built in. Same problems, three shapes. <span style={{ color: "var(--ink)" }}>(Lakebed is a pre-release / pre-GA alpha — its cells fill in as it nears GA.)</span>
+        <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 720, marginTop: 14 }}>
+          The same one row, one mutation trick runs a whole app — there's a real one at the end of this page (<a class="lk-link" href="#fit">Fit Furniture ↓</a>).
         </p>
-        <div style={{ overflowX: "auto", marginTop: 22, boxShadow: "6px 6px 0 var(--ink)" }}>
-          <table class="vtable">
-            <thead>
-              <tr>
-                <th style={{ background: "var(--bg)" }}></th>
-                <th>Lakebed <span style={{ fontWeight: 400, fontSize: 11, color: "var(--muted)" }}>(pre-GA)</span></th>
-                <th>Vercel</th>
-                <th><a class="nlink" href="https://somewhere.tech" target="_blank" rel="noreferrer" style={{ color: "var(--ink)", fontFamily: "'Space Mono', monospace" }}>somewhere.tech ↗</a></th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ["what it is", "one capsule: client + server + DB in a single bundle", "hosts your frontend + serverless functions", "frontend + functions, backend built in"],
-                ["client ↔ server", "RPC — call functions by name", "REST routes + Server Actions", "REST + SDK client"],
-                ["database", "built in (ctx.db)", "bring your own", "built in (sw.db)"],
-                ["realtime", "reactive queries", "add Pusher / Ably", "built in (channels)"],
-                ["auth", "built in (useAuth)", "add NextAuth / Clerk", "built in (sw.auth)"],
-                ["first deploy", "anonymous — no account", "vercel deploy / git push", "somewhere deploy"],
-                ["runs on", "Railway (single region)", "edge + AWS", "Cloudflare + AWS"],
-              ].map((r) => (
-                <tr key={r[0]}>
-                  <td>{r[0]}</td>
-                  <td>{r[1]}</td>
-                  <td>{r[2]}</td>
-                  <td>{r[3]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 14, maxWidth: 770 }}>Lakebed trades generality for one-capsule simplicity; the classic stack trades assembly for reach. Pick the shape that fits the job.</p>
       </Section>
 
-      {/* 06 edges */}
-      <Section id="edges" n="06" kicker="Today's limits · pre-GA" title="The edges (a snapshot of the alpha)">
+      {/* 04 the stack — architecture explainer */}
+      <Section id="stack" n="04" kicker="The shape" title="The whole stack, at a glance">
+        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
+          Here's how an app is actually put together, three ways — top to bottom: where the <b style={{ color: "var(--ink)" }}>frontend</b> is hosted, what the <b style={{ color: "var(--ink)" }}>backend</b> is made of, and who runs each piece. Start on <b style={{ color: "var(--ink)" }}>Conventional</b> — the way most apps are built today — then flip the tabs to watch it collapse.
+        </p>
+        <div style={{ marginTop: 22 }}>
+          <StackDiagram mode={stackMode} setMode={setStackMode} />
+        </div>
+        <p style={{ fontSize: 14.5, color: "var(--muted)", marginTop: 18, maxWidth: 820 }}>
+          The standard setup is that first tab: your React app is hosted on <b style={{ color: "var(--ink)" }}>Vercel</b>, and your "backend" is really five separate products — <b style={{ color: "var(--ink)" }}>Clerk, Stripe, Supabase, Pusher, an AI API</b> — each run by a different company. There's no single backend box: the thing holding them together is <b style={{ color: "var(--ink)" }}>code you write</b> — some in the browser, some in Vercel's edge functions — and keeping all five in sync is your job. <b style={{ color: "var(--ink)" }}>Lakebed</b> replaces the whole pile with one program — one company runs your UI, server, database, and auth as a single thing (which is also why realtime just works: it's all one running process). <b style={{ color: "var(--ink)" }}>somewhere.tech</b> is the same idea, drawn at the backend — one service for auth, database, AI, payments, storage and realtime, and it serves your frontend too, so both sit on one platform. Every step is the same shift: <b style={{ color: "var(--ink)" }}>fewer separate things to wire together and keep alive.</b>
+        </p>
+      </Section>
+
+      {/* 05 the code — synced to the diagram above */}
+      <Section id="code" n="05" kicker="Why so little code" title="The same feature, in each stack">
+        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
+          One concrete job: <b style={{ color: "var(--ink)" }}>show a signed-in user their own notes</b> — and nobody else's. Auth + a scoped read, the most ordinary thing an app does. The tab is the same one as the diagram, so flipping it changes both.
+        </p>
+        <div style={{ marginTop: 22 }}>
+          <StackCode mode={stackMode} setMode={setStackMode} />
+        </div>
+        <p style={{ fontSize: 14.5, color: "var(--muted)", marginTop: 16, maxWidth: 800 }}>
+          It's not that the conventional code is bad — it's that auth and the database are <i>separate services</i>, so you fetch the user from one, carry their id by hand, and ask the other. In a capsule there's nothing to carry: the query runs <i>inside</i> the program that already knows who's calling, so <code class="ic">ctx.auth.userId</code> is just there. That's the real reason it's shorter — not a trick, just one fewer boundary to cross.
+        </p>
+      </Section>
+
+      {/* 06 authentication */}
+      <Section id="auth" n="06" kicker="Who's signed in" title="Authentication, with nothing to wire">
+        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
+          Auth is part of the capsule too — not a vendor you bolt on. Inside every query and mutation the caller is just <code class="ic">ctx.auth.userId</code>: no middleware, no token plumbing, no callback URLs. Sign-in today is <b style={{ color: "var(--ink)" }}>Google</b> or a <b style={{ color: "var(--ink)" }}>guest</b> session, handled by <b style={{ color: "var(--ink)" }}>Shoo</b> — Lakebed's own auth layer (also pre-GA).
+        </p>
+        <div class="two" style={{ display: "grid", gridTemplateColumns: "minmax(0,300px) 1fr", gap: 22, marginTop: 24, alignItems: "start" }}>
+          {/* a little auth-flow visual */}
+          <div style={{ border: "1.5px solid var(--ink)", background: "var(--surface)", boxShadow: "6px 6px 0 var(--accent)", padding: 16 }}>
+            {[
+              ["user clicks sign in", "Google · or stay a guest"],
+              ["Shoo verifies them", "Lakebed's auth layer"],
+              ["ctx.auth.userId", "their id, inside every query + mutation", true],
+            ].map(([h, s, hot]: any, i: number) => (
+              <div key={h}>
+                {i > 0 && <div class="mono" style={{ textAlign: "center", color: "var(--muted)", fontSize: 13, margin: "2px 0" }}>↓</div>}
+                <div style={{ border: "1.5px solid var(--ink)", background: hot ? "#dff0a8" : "var(--bg)", padding: "9px 12px" }}>
+                  <div class="mono" style={{ fontSize: 12, fontWeight: 700 }}>{hot ? "★ " : ""}{h}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{s}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div>
+            <p style={{ fontSize: 15, color: "var(--muted)", margin: "0 0 12px" }}>So a per-user query writes itself — it scopes to the caller with no argument to pass in:</p>
+            <Code file="server.ts — a per-user todo list" code={`queries: {
+  // scoped to whoever's calling — their rows, nobody else's
+  mine: query((ctx) =>
+    ctx.db.todos.where("ownerId", ctx.auth.userId).all()),
+},
+mutations: {
+  add: mutation((ctx, text: string) =>            // stamped with who you are
+    ctx.db.todos.insert({ ownerId: ctx.auth.userId, text })),
+}`} />
+            <p style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 14 }}>
+              One thing to know: identity is <b style={{ color: "var(--ink)" }}>per capsule</b>. The same Google account is a distinct user id in every app — so your users are scoped to your app by default, not shared across the platform.
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      {/* 07 edges */}
+      <Section id="edges" n="07" kicker="Today's limits · pre-GA" title="The edges (a snapshot of the alpha)">
         <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 760, marginTop: 0 }}>
           <b style={{ color: "var(--ink)" }}>Lakebed is a pre-release (pre-GA) alpha as of June 21, 2026.</b> The limits below are real <i>today</i>, but they're constraints of the alpha — not the destination. Expect most to lift as it rolls out toward GA, so check the current build before you assume a wall is still there. Design around them for now.
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 16, marginTop: 22 }}>
           {[
             ["~1 MB state / capsule", "Plenty for documents, rooms, and small collections today — the cap is expected to rise."],
-            ["no file storage yet", "No blob/image hosting for now; small images go in the DB as base64. Native storage is on the roadmap."],
+            ["no file storage yet", "No blob/image hosting. Workaround: stash a small image as a base64 data-URI in a string column — downscale + compress it under the ~64 KB-per-value cap (grayscale + few colors helps)."],
             ["server toolbox is lean", "Today the server runs your TypeScript + Lakebed primitives + Preact — no npm / node builtins yet."],
             ["5-second request cap", "Mutations and queries must be quick for now. No long jobs or streaming work."],
             ["no server-side loops", "while / unbounded for are blocked at build time today — use map / filter / find."],
@@ -445,6 +704,77 @@ const bug = useQuery("bug");        // one shared row; no sockets, no events`} /
           <b class="mono">Reach for Lakebed when:</b>
           <span> a multiplayer toy, a shared room, a live dashboard, a collaborative prototype — anything where "everyone sees it update" is the magic and the data stays small. And the ceiling keeps rising as it heads to GA.</span>
         </div>
+      </Section>
+
+      {/* 08 fit — project two, the showcase, at the very end */}
+      <Section id="fit" n="08" kicker="Project two" title="Fit Furniture — a real one, end to end">
+        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
+          The ladybug proves the trick on one row. <b style={{ color: "var(--ink)" }}>Fit</b> is the same trick under real load — a multiplayer floor-plan tool we built as the proper stress-test of the reactive database. Drop a floor plan, drag furniture around a room to scale, and watch it move live for everyone in the room. It exercises every part of a capsule at once.
+        </p>
+        <div style={{ marginTop: 24, maxWidth: 860, border: "1.5px solid var(--ink)", background: "var(--surface)", boxShadow: "6px 6px 0 var(--ink)" }}>
+          {/* faux browser chrome */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", borderBottom: "1.5px solid var(--ink)", background: "var(--bg)" }}>
+            <span style={{ display: "flex", gap: 5 }}>{[0, 1, 2].map((d) => <span key={d} style={{ width: 10, height: 10, borderRadius: 999, border: "1.5px solid var(--ink)", background: d === 0 ? "var(--accent)" : "transparent" }} />)}</span>
+            <span class="mono" style={{ fontSize: 12, color: "var(--muted)" }}>fit.lakebed.app</span>
+          </div>
+          <div style={{ padding: "20px 18px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {[
+                ["shared room state", "every piece is one reactive query — two people, one room, live"],
+                ["optimistic drag", "the furniture follows your cursor instantly, then the server confirms"],
+                ["floor plan in the DB", "no file storage — the plan is a downscaled grayscale base64 in a string column"],
+                ["to scale", "set the real width of one wall; everything else sizes itself from it"],
+              ].map(([h, b]) => (
+                <div key={h} style={{ flex: "1 1 230px", border: "1.5px solid var(--ink)", borderLeft: "5px solid var(--accent)", background: "var(--bg)", padding: "12px 14px" }}>
+                  <div class="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>{h}</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 5 }}>{b}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginTop: 20 }}>
+              <a class="cta" href="https://fit.lakebed.app" target="_blank" rel="noreferrer">open fit.lakebed.app →</a>
+              <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Open it in two tabs and drag a sofa — it moves in both.</span>
+            </div>
+          </div>
+        </div>
+        <p style={{ fontSize: 14.5, color: "var(--muted)", marginTop: 18, maxWidth: 800 }}>
+          Fit is also where the one rough edge shows: today every drag reships the whole room to everyone subscribed, so it stays sharp at a few people per room. That's the <b style={{ color: "var(--ink)" }}>scoping</b> ask from the realtime section — a way to target a subscription at one room by id. The ergonomics are already here; per-room scoping is the upgrade that makes it scale, with no change to the app's code. Consider this the feature request.
+        </p>
+      </Section>
+
+      {/* 09 draw — project three, a capsule that spawns capsules */}
+      <Section id="draw" n="09" kicker="Project three" title="Draw — a whiteboard that spawns its own copies">
+        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
+          <a class="lk-link" href="https://draw.lakebed.app" target="_blank" rel="noreferrer">draw.lakebed.app</a> is a multiplayer whiteboard — every shape is a database row, drawing is a mutation, the canvas is one <code class="ic">useQuery</code> (the ladybug and Fit trick, at full size). But the real demo is the front door: hit <b style={{ color: "var(--ink)" }}>New board</b> and you get <b style={{ color: "var(--ink)" }}>your own live whiteboard at a fresh URL</b> — instantly, no signup — to share and draw on together.
+        </p>
+        <div style={{ marginTop: 24, maxWidth: 860, border: "1.5px solid var(--ink)", background: "var(--surface)", boxShadow: "6px 6px 0 var(--ink)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", borderBottom: "1.5px solid var(--ink)", background: "var(--bg)" }}>
+            <span style={{ display: "flex", gap: 5 }}>{[0, 1, 2].map((d) => <span key={d} style={{ width: 10, height: 10, borderRadius: 999, border: "1.5px solid var(--ink)", background: d === 0 ? "var(--accent)" : "transparent" }} />)}</span>
+            <span class="mono" style={{ fontSize: 12, color: "var(--muted)" }}>draw.lakebed.app</span>
+          </div>
+          <div style={{ padding: "20px 18px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {[
+                ["every shape is a row", "rects, arrows, freehand, text — each is a row; the canvas is one live query, so it's multiplayer with no extra code"],
+                ["one capsule per board", "each board is its own program + its own database, spun up just to run that single board"],
+                ["the reactive DB has room to spare", "the “reship on every write” limit never bites — there's only ever one board's data, and only the people on it"],
+                ["a capsule that makes capsules", "the New-board button is a Lakebed app that generates other Lakebed apps — one program spinning up the next"],
+              ].map(([h, b]) => (
+                <div key={h} style={{ flex: "1 1 230px", border: "1.5px solid var(--ink)", borderLeft: "5px solid var(--accent)", background: "var(--bg)", padding: "12px 14px" }}>
+                  <div class="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>{h}</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 5 }}>{b}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginTop: 20 }}>
+              <a class="cta" href="https://draw.lakebed.app" target="_blank" rel="noreferrer">open draw.lakebed.app →</a>
+              <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Click <b style={{ color: "var(--ink)" }}>New board</b> for your own — first visitor can claim it, choose who draws, and lock viewing behind a passcode.</span>
+            </div>
+          </div>
+        </div>
+        <p style={{ fontSize: 14.5, color: "var(--muted)", marginTop: 18, maxWidth: 820 }}>
+          This is the part that makes the whole platform click. The thing we flagged as Fit's ceiling — one capsule holding many rooms and reshipping everyone's data to everyone — simply isn't a problem here, because <b style={{ color: "var(--ink)" }}>every board is its own capsule</b>: a self-contained program and database, dedicated to one board and the handful of people on it. The reactive database has all the headroom it needs when it's only ever serving a <i>single</i> app. And the spawn itself is kin to the <b style={{ color: "var(--ink)" }}>anonymous deploys</b> from the top of this page — each board is a throwaway capsule, generated from a stored one with no account, that cleans itself up after about a week. Getting a Lakebed capsule to launch another Lakebed capsule took some creative engineering — but the payoff is the cleanest version of the idea: the whole thing, front door and every board, runs on Lakebed.
+        </p>
       </Section>
 
       {/* footer */}
