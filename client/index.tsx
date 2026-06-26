@@ -40,7 +40,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',
 .vtable th,.vtable td{border:1.5px solid var(--ink);padding:11px 15px;text-align:left;vertical-align:top}
 .vtable thead th{background:#e6e3d8;font-family:'Space Mono';font-weight:700}
 .vtable td:first-child{font-family:'Space Mono';font-size:12.5px;color:var(--muted)}
-.mark{background:var(--accent);border:1.5px solid var(--ink);padding:0 8px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.mark{background:var(--accent);border:1.5px solid var(--ink);padding:0 8px;line-height:1.05;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .marq{overflow:hidden;background:var(--accent);border-top:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink)}
 .marq-track{display:inline-flex;white-space:nowrap;animation:marq 26s linear infinite;font-family:'Space Mono';font-weight:700;font-size:14px;letter-spacing:.05em;padding:11px 0;color:var(--ink)}
 @keyframes marq{to{transform:translateX(-50%)}}
