@@ -202,20 +202,45 @@ function Section({ id, n, kicker, title, children }: any) {
 
 const PROMPT = `You're in a fresh Linux sandbox. Build and deploy a small full-stack app on Lakebed — a runtime where ONE "capsule" bundles a Preact client + server + database and ships to a live URL with NO account.
 
-1) Scaffold:  npx -y lakebed@0.0.25 new myapp && cd myapp
+1) Scaffold:  npx -y lakebed@0.0.25 new myapp && cd myapp     (it's a git repo)
+
 2) The server is one capsule() — queries take no args, mutations take args:
      import { capsule, mutation, query, string, table } from "lakebed/server";
      export default capsule({
        name: "MyApp",
-       schema: { items: table({ text: string() }) },
+       schema:    { items: table({ text: string() }) },
        queries:   { items: query((ctx) => ctx.db.items.all()) },
        mutations: { add: mutation((ctx, text) => ctx.db.items.insert({ text })) },
      });
    Client: useQuery("items") is live; useMutation("add") writes.
-3) Anonymous deploys run an interpreted subset, so keep the server: SYNCHRONOUS
-   (no async/await), no fetch, no secrets/env, no timers, no loops (use
-   map/filter/find), state under ~1MB, no file storage.
-4) Deploy with no login:  npx -y lakebed@0.0.25 deploy   → give me the live URL.
+   Column types are string() and boolean() ONLY. Every row auto-gets id/createdAt/
+   updatedAt — don't declare those, and don't reach for number()/date().
+
+3) Anonymous deploys run an interpreted subset. Keep the SERVER synchronous: no
+   async/await, no fetch/outbound calls, no secrets/env, no timers, no loops (use
+   map/filter/find), state under ~1MB, no file storage. (secrets/env + server-side
+   fetch need a CLAIMED deploy — not available anonymously.)
+
+   HOW IT'S ENFORCED — two traps that bite:
+   • It's a literal TEXT scan over server/ and shared/ ONLY, run at DEPLOY time. It
+     does not parse — it matches these tokens even inside comments and strings, so
+     keep them out of server/ and shared/ entirely (yes, even a comment that's
+     describing the rule): fetch, async, while(, for(;, eval(, Function(, import(,
+     process, globalThis, setTimeout(, setInterval(, from "node:". The client/ dir
+     is NOT scanned — anything goes there.
+   • npx lakebed dev does NOT run this scan (it's plain esbuild), so banned tokens,
+     async and fetch all "work" in dev and then fail at deploy. Treat dev as a
+     UI/logic check only — never as proof it will ship.
+
+4) COMMIT BEFORE EVERY DEPLOY:  git add -A && git commit -m wip
+   Deploy packages git-TRACKED files only. A new untracked file (e.g. a fresh
+   shared/ helper) silently drops out, the server import resolves to nothing, and
+   you get a "successful" deploy with ZERO queries/mutations and no error.
+
+5) Deploy (no login):  npx -y lakebed@0.0.25 deploy
+   Then VERIFY — don't trust the success line:  npx -y lakebed@0.0.25 inspect <dep_id>
+   Confirm Queries and Mutations are listed (not "(none)"). A broken server still
+   returns HTTP 200 with an empty backend. Then give me the live URL.
 
 App I want: DESCRIBE YOUR APP HERE — e.g. "a shared to-do list everyone edits live".`;
 
