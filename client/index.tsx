@@ -277,32 +277,14 @@ notes: query((ctx) =>
 // client — empty when signed out:
 const notes = useQuery("notes");`,
   },
-  somewhere: {
-    label: "somewhere.tech", sub: "unified full-stack", link: "https://somewhere.tech",
-    front: "your frontend", frontHost: "served by somewhere",
-    contained: true, boxLabel: "one somewhere platform",
-    unifiedNote: "frontend + the unified backend on one platform — one client SDK between them",
-    services: [
-      { l: "auth" }, { l: "database" }, { l: "AI" }, { l: "payments" }, { l: "storage" }, { l: "realtime" },
-    ],
-    takeaway: "one service for the entire backend — auth, database, AI, payments, storage, realtime",
-    runsOn: "Cloudflare · a unified edge network",
-    lines: 5, codeNote: "one client for auth and data — still pass the id, but there's no second vendor to wire.",
-    codeFile: "their own notes · somewhere",
-    code: `const { data: { user } } = await client.auth.getUser();
-if (!user) return <SignIn />;               // gate it
-
-const { data: notes } = await client        // one client: auth + db
-  .from("notes").select("*").eq("user_id", user.id);`,
-  },
 };
 
 function StackTabs({ mode, setMode }: any) {
   return (
     <div style={{ display: "flex", border: "1.5px solid var(--ink)", background: "var(--surface)" }}>
-      {["conventional", "lakebed", "somewhere"].map((m, i) => (
+      {["conventional", "lakebed"].map((m, i) => (
         <button key={m} onClick={() => setMode(m)} class="mono"
-          style={{ flex: 1, padding: "10px 6px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", border: "none", borderRight: i < 2 ? "1.5px solid var(--ink)" : "none", background: mode === m ? "var(--accent)" : "transparent", color: "var(--ink)", textAlign: "center" }}>
+          style={{ flex: 1, padding: "10px 6px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", border: "none", borderRight: i < 1 ? "1.5px solid var(--ink)" : "none", background: mode === m ? "var(--accent)" : "transparent", color: "var(--ink)", textAlign: "center" }}>
           {STACKS[m].label}
           <span style={{ display: "block", fontWeight: 400, fontSize: 9.5, color: "var(--muted)", marginTop: 2 }}>{STACKS[m].sub}</span>
         </button>
@@ -414,7 +396,6 @@ function StackDiagram({ mode, setMode }: any) {
         {/* RUNS ON */}
         <div class="mono" style={{ padding: "11px 18px", borderTop: "1.5px solid var(--ink)", fontSize: 10.5, color: "var(--muted)", display: "flex", justifyContent: "center", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span>▸ the servers are run by <b style={{ color: "var(--ink)" }}>{s.runsOn}</b></span>
-          {s.link && <a class="lk-link" href={s.link} target="_blank" rel="noreferrer" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11.5 }}>somewhere.tech ↗</a>}
         </div>
       </div>
     </div>
@@ -488,10 +469,10 @@ export function App() {
               <span class="mono" style={{ fontSize: 11.5, border: "1.5px solid var(--ink)", padding: "3px 9px", background: "var(--ink)", color: "#e9e7da" }}>pre-GA alpha</span>
             </div>
             <h1 class="h1 mono reveal" style={{ fontSize: 54, lineHeight: 1.22, fontWeight: 700, letterSpacing: "-0.03em", margin: "0 0 22px" }}>
-              Ship a full-stack app <span class="mark">in one file.</span>
+              Build a full-stack app <span class="mark">as one capsule.</span>
             </h1>
             <p class="reveal" style={{ fontSize: 18, color: "var(--muted)", maxWidth: 560, margin: "0 0 26px" }}>
-              Lakebed bundles your UI, server, database, auth, and realtime into a single deployable <b style={{ color: "var(--ink)" }}>capsule</b>. No API routes, no <code class="ic">fetch</code>, no separate database to wire up. Here's how to build one — and where it beats the usual stack.
+              Lakebed is an opinionated runtime for small full-stack apps. Instead of wiring together a frontend host, API routes, auth, a database, and a realtime layer, you write one <b style={{ color: "var(--ink)" }}>capsule</b> — a schema, queries, mutations, and a Preact UI. The client still runs in the browser; the difference is that the backend side — state, server functions, auth context, and live subscriptions — is one Lakebed runtime. Here's how it works, and why it's a genuinely different <i>shape</i> from the usual stack.
             </p>
             <div class="reveal" style={{ display: "flex", gap: 14, alignItems: "center", padding: "13px 16px", border: "1.5px solid var(--ink)", background: "var(--surface)", maxWidth: 540, boxShadow: "4px 4px 0 var(--ink)" }}>
               <div style={{ position: "relative", width: 26, height: 32, flexShrink: 0 }}><Ladybug /></div>
@@ -519,7 +500,7 @@ $ npx lakebed deploy
       <div class="marq">
         <div class="marq-track">
           {Array.from({ length: 2 }).map((_, i) => (
-            <span key={i}>&nbsp;BUILD ON LAKEBED&nbsp; ✦ &nbsp;ONE LIVING PROGRAM&nbsp; ✦ &nbsp;SHIP FROM A CHAT&nbsp; ✦ &nbsp;REALTIME BY DEFAULT&nbsp; ✦ &nbsp;DEPLOY BEFORE YOU SIGN UP&nbsp; ✦ </span>
+            <span key={i}>&nbsp;BUILD ON LAKEBED&nbsp; ✦ &nbsp;ONE CAPSULE RUNTIME&nbsp; ✦ &nbsp;SHIP FROM A CHAT&nbsp; ✦ &nbsp;REALTIME BY DEFAULT&nbsp; ✦ &nbsp;DEPLOY BEFORE YOU SIGN UP&nbsp; ✦ </span>
           ))}
         </div>
       </div>
@@ -549,7 +530,7 @@ $ npx lakebed deploy
       {/* 02 capsule */}
       <Section id="capsule" n="02" kicker="The unit" title="What's a capsule?">
         <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 760, marginTop: 0 }}>
-          Forget the word for a second. The normal way to ship an app is five separate things stitched over the network: a frontend host, stateless functions that boot and die, a database in another building, an auth service, a realtime service. A <b style={{ color: "var(--ink)" }}>capsule</b> is the opposite — <b style={{ color: "var(--ink)" }}>one program that stays running and holds your app's data in its own memory</b>. The server, the database, the auth aren't services it phones; they're parts of one living thing.
+          Forget the word for a second. The normal way to ship an app is five separate things stitched over the network: a frontend host, stateless functions that boot and die, a database in another building, an auth service, a realtime service. A <b style={{ color: "var(--ink)" }}>capsule</b> is the opposite — <b style={{ color: "var(--ink)" }}>one backend program that stays running</b>, with its state held in the capsule runtime instead of a service it phones. The server, the database, and the auth aren't separate things to wire together; they're one running thing. Your Preact client still loads in the browser and talks to it over a single live connection.
         </p>
         <div class="two" style={{ display: "grid", gridTemplateColumns: "minmax(0,300px) 1fr", gap: 22, marginTop: 26, alignItems: "start" }}>
           <div>
@@ -564,14 +545,14 @@ $ npx lakebed deploy
             <div style={{ border: "1.5px solid var(--ink)", boxShadow: "6px 6px 0 var(--accent)", background: "var(--surface)" }}>
               <div class="mono" style={{ padding: "9px 14px", borderBottom: "1.5px solid var(--ink)", background: "var(--accent)", fontSize: 12.5, fontWeight: 700 }}>the capsule · one running program</div>
               <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-                {[["client", "the UI you see", false], ["server", "queries + mutations", false], ["database", "in memory — not another building", true], ["auth", "the signed-in user", false]].map(([h, s, d]: any) => (
+                {[["client", "loads in your browser", false], ["server", "queries + mutations", false], ["database", "local to the capsule", true], ["auth", "the signed-in user", false]].map(([h, s, d]: any) => (
                   <div key={h} style={{ border: "1.5px solid var(--ink)", background: d ? "#dff0a8" : "var(--bg)", padding: "9px 12px" }}>
                     <span class="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>{h}{d ? " ★" : ""}</span>
                     <span style={{ fontSize: 11.5, color: "var(--muted)" }}> · {s}</span>
                   </div>
                 ))}
               </div>
-              <div class="mono" style={{ padding: "9px 14px", borderTop: "1.5px solid var(--ink)", fontSize: 10.5, color: "var(--muted)" }}>always running · data lives inside · realtime falls out for free</div>
+              <div class="mono" style={{ padding: "9px 14px", borderTop: "1.5px solid var(--ink)", fontSize: 10.5, color: "var(--muted)" }}>always running · state lives in the runtime · realtime falls out for free</div>
             </div>
           </div>
           <div>
@@ -592,7 +573,7 @@ export default capsule({
       {/* 03 realtime */}
       <Section id="realtime" n="03" kicker="Live by default" title="Realtime isn't a feature — it's the default">
         <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 720, marginTop: 0 }}>
-          Every <code class="ic">useQuery</code> is a live subscription. When any mutation writes, every subscribed query re-runs and every client re-renders. The ladybug wandering around this page is exactly that — here's the whole backend behind her:
+          A normal database query is like asking a question once — "what's the state right now?" — and the answer goes stale the moment you have it. A Lakebed <code class="ic">useQuery</code> is closer to a <b style={{ color: "var(--ink)" }}>spreadsheet formula</b>: it stays connected to the data it depends on, and when a mutation changes that data, Lakebed pushes the fresh answer to every subscribed client. The ladybug wandering around this page is exactly that — here's the whole backend behind her:
         </p>
         <div style={{ marginTop: 18 }}>
           <Code file="server.ts — the shared bug on this page" code={`mutations: {
@@ -604,10 +585,13 @@ export default capsule({
 }
 
 // client — everyone's bug crawls to the new spot:
-const bug = useQuery("bug");        // one shared row; no sockets, no events`} />
+const bug = useQuery("bug");        // one shared row — you write no socket code`} />
         </div>
         <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 720, marginTop: 16 }}>
-          One row, shared by everyone. You write a new position; every subscriber's bug scurries there. No channels to open, no events to emit, no socket to reconnect.
+          One row, shared by everyone. You write a new position; every subscriber's bug scurries there. <b style={{ color: "var(--ink)" }}>No socket code to write, no events to design, no reconnect logic to maintain</b> — there's still a WebSocket under the hood, you just don't write the socket layer.
+        </p>
+        <p style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 720, marginTop: 12 }}>
+          How it works today: in the current alpha, a write causes the subscribed queries to re-run and pushes the fresh result to everyone watching. That's perfect at small scale — and it's exactly why state stays capped and why write-heavy apps need a little care.
         </p>
         <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 720, marginTop: 14 }}>
           The same one row, one mutation trick runs a whole app — there's a real one at the end of this page (<a class="lk-link" href="#fit">Fit Furniture ↓</a>).
@@ -617,13 +601,16 @@ const bug = useQuery("bug");        // one shared row; no sockets, no events`} /
       {/* 04 the stack — architecture explainer */}
       <Section id="stack" n="04" kicker="The shape" title="The whole stack, at a glance">
         <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
-          Here's how an app is actually put together, three ways — top to bottom: where the <b style={{ color: "var(--ink)" }}>frontend</b> is hosted, what the <b style={{ color: "var(--ink)" }}>backend</b> is made of, and who runs each piece. Start on <b style={{ color: "var(--ink)" }}>Conventional</b> — the way most apps are built today — then flip the tabs to watch it collapse.
+          Here's how an app is actually put together, two ways — top to bottom: where the <b style={{ color: "var(--ink)" }}>frontend</b> is hosted, what the <b style={{ color: "var(--ink)" }}>backend</b> is made of, and who runs each piece. Start on <b style={{ color: "var(--ink)" }}>Conventional</b> — the way most apps are built today — then flip to <b style={{ color: "var(--ink)" }}>Lakebed</b> to watch it collapse.
         </p>
         <div style={{ marginTop: 22 }}>
           <StackDiagram mode={stackMode} setMode={setStackMode} />
         </div>
         <p style={{ fontSize: 14.5, color: "var(--muted)", marginTop: 18, maxWidth: 820 }}>
-          The standard setup is that first tab: your React app is hosted on <b style={{ color: "var(--ink)" }}>Vercel</b>, and your "backend" is really five separate products — <b style={{ color: "var(--ink)" }}>Clerk, Stripe, Supabase, Pusher, an AI API</b> — each run by a different company. There's no single backend box: the thing holding them together is <b style={{ color: "var(--ink)" }}>code you write</b> — some in the browser, some in Vercel's edge functions — and keeping all five in sync is your job. <b style={{ color: "var(--ink)" }}>Lakebed</b> replaces the whole pile with one program — one company runs your UI, server, database, and auth as a single thing (which is also why realtime just works: it's all one running process). <b style={{ color: "var(--ink)" }}>somewhere.tech</b> is the same idea, drawn at the backend — one service for auth, database, AI, payments, storage and realtime, and it serves your frontend too, so both sit on one platform. Every step is the same shift: <b style={{ color: "var(--ink)" }}>fewer separate things to wire together and keep alive.</b>
+          The standard setup is that first tab: your React app is hosted on <b style={{ color: "var(--ink)" }}>Vercel</b>, and your "backend" is really five separate products — <b style={{ color: "var(--ink)" }}>Clerk, Stripe, Supabase, Pusher, an AI API</b> — each run by a different company. There's no single backend box: the thing holding them together is <b style={{ color: "var(--ink)" }}>code you write</b> — some in the browser, some in Vercel's edge functions — and keeping all five in sync is your job. <b style={{ color: "var(--ink)" }}>Lakebed</b> replaces that whole pile with one running program: one runtime holds your server, database, and auth, and serves the Preact client to the browser (which is also why realtime just works — it's all one process). The point isn't "fewer logos." It's a <b style={{ color: "var(--ink)" }}>genuinely different app shape</b> — state, server functions, auth, and live queries are parts of one model instead of services you stitch across boundaries.
+        </p>
+        <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 12, maxWidth: 820, fontStyle: "italic" }}>
+          Full disclosure: I build in this space too — but this page is about understanding Lakebed, so my own thing isn't in the comparison.
         </p>
       </Section>
 
