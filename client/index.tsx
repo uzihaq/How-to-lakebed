@@ -528,7 +528,7 @@ $ npx lakebed deploy
         <div style={{ marginTop: 18, maxWidth: 780, border: "1.5px solid var(--ink)", borderLeft: "5px solid var(--accent)", background: "var(--surface)", padding: "16px 18px" }}>
           <div class="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>What an anonymous deploy can't do <span style={{ color: "var(--muted)", fontWeight: 400 }}>(until you claim it)</span></div>
           <p style={{ fontSize: 14.5, color: "var(--muted)", margin: "10px 0 0" }}>
-            The server runs as an interpreted subset, so keep it <b style={{ color: "var(--ink)" }}>synchronous</b> — no <code class="ic">async/await</code>, no outbound <code class="ic">fetch</code>, no secrets/<code class="ic">env</code>, no timers, no loops (use <code class="ic">map/filter/find</code>). Plus the usual capsule limits: ~1 MB state, no file storage, no npm, ~10k requests + 1k writes a day — and the deploy is <b style={{ color: "var(--ink)" }}>temporary, expiring after about a week</b>. <b style={{ color: "var(--ink)" }}>Claim it</b> (free, GitHub login) to keep the URL for good, run your real source bundle, and unlock async, fetch, and secrets.
+            The server runs as an interpreted subset, so keep it <b style={{ color: "var(--ink)" }}>synchronous</b> — no <code class="ic">async/await</code>, no outbound <code class="ic">fetch</code>, no secrets/<code class="ic">env</code>, no timers, no loops (use <code class="ic">map/filter/find</code>). Plus the usual capsule limits: ~1 MB state, no file storage, no npm, ~10k requests + 1k writes a day — and the deploy is <b style={{ color: "var(--ink)" }}>temporary, expiring after about a week</b>. <b style={{ color: "var(--ink)" }}>Claim it</b> (free, GitHub login) to keep the URL for good, run your real source bundle, and unlock async, outbound fetch, and secrets — env keys live in a <code class="ic">.env.lakebed.server</code> file that deploys with the capsule and shows up as <code class="ic">ctx.env</code> in your server code. (The CLI enforces the tier: define server env on an unclaimed capsule and the deploy refuses until you claim.)
           </p>
         </div>
       </Section>
@@ -601,6 +601,9 @@ const bug = useQuery("bug");        // one shared row — you write no socket co
         </p>
         <p style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 720, marginTop: 12 }}>
           How it works today: in the current alpha, a write causes the subscribed queries to re-run and pushes the fresh result to everyone watching. That's perfect at small scale — and it's exactly why state stays capped and why write-heavy apps need a little care.
+        </p>
+        <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 720, marginTop: 14 }}>
+          <b style={{ color: "var(--ink)" }}>One more thing rides that socket: deploys.</b> Ship a new version of a capsule and every open tab reloads itself — the runtime pushes a <code class="ic">refresh</code> message down the same live connection the queries use. There's no cache-busting, no service worker, no "please refresh" banner to build: to the runtime, <b style={{ color: "var(--ink)" }}>a code update is just another live update</b>. (This page does it too — if it ever blinks while you're reading, that was a deploy.)
         </p>
         <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 720, marginTop: 14 }}>
           The same one row, one mutation trick runs a whole app — there's a real one at the end of this page (<a class="lk-link" href="#fit">Fit Furniture ↓</a>).
