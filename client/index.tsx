@@ -458,6 +458,7 @@ export function App() {
           <a class="nlink" href="#auth">auth</a>
           <a class="nlink" href="#fit">fit</a>
           <a class="nlink" href="#draw">draw</a>
+          <a class="nlink" href="#build">build</a>
           <a class="nlink" href="#edges">edges</a>
         </div>
         <a class="cta" style={{ marginLeft: 8 }} href="#try">try it →</a>
@@ -535,7 +536,10 @@ $ npx lakebed deploy
       {/* 02 capsule */}
       <Section id="capsule" n="02" kicker="The unit" title="What's a capsule?">
         <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 760, marginTop: 0 }}>
-          Forget the word for a second. The normal way to ship an app is five separate things stitched over the network: a frontend host, stateless functions that boot and die, a database in another building, an auth service, a realtime service. A <b style={{ color: "var(--ink)" }}>capsule</b> is the opposite — <b style={{ color: "var(--ink)" }}>one backend program that stays running</b>, with its state held in the capsule runtime instead of a service it phones. The server, the database, and the auth aren't separate things to wire together; they're one running thing. Your Preact client still loads in the browser and talks to it over a single live connection.
+          Forget the word for a second. The normal way to ship an app is five separate things stitched over the network: a frontend host, stateless functions that boot and die, a database in another building, an auth service, a realtime service. Your app isn't really a <i>thing</i> — it's a constellation, held together by code you write. A <b style={{ color: "var(--ink)" }}>capsule</b> is the opposite — <b style={{ color: "var(--ink)" }}>one backend program that stays running</b>, with its state held in the capsule runtime instead of a service it phones. The server, the database, and the auth aren't separate things to wire together; they're one running thing. Your Preact client still loads in the browser and talks to it over a single live connection.
+        </p>
+        <p style={{ fontSize: 15, color: "var(--muted)", maxWidth: 760, marginTop: 14 }}>
+          Is "capsule" a real thing or a marketing word? Here's the test: <b style={{ color: "var(--ink)" }}>a marketing term can't be POSTed.</b> A capsule is a single self-contained envelope — under a megabyte — holding the entire app: the schema, the queries and mutations, the client, the auth wiring. Deploying isn't provisioning infrastructure; it's handing Lakebed that one envelope and getting back a URL where the whole thing is running. Hold that thought — it lands for real at <a class="lk-link" href="#draw">Draw ↓</a>, an app that holds <i>other apps</i> in its hand and throws them.
         </p>
         <div class="two" style={{ display: "grid", gridTemplateColumns: "minmax(0,300px) 1fr", gap: 22, marginTop: 26, alignItems: "start" }}>
           <div>
@@ -593,7 +597,7 @@ export default capsule({
 const bug = useQuery("bug");        // one shared row — you write no socket code`} />
         </div>
         <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 720, marginTop: 16 }}>
-          One row, shared by everyone. You write a new position; every subscriber's bug scurries there. <b style={{ color: "var(--ink)" }}>No socket code to write, no events to design, no reconnect logic to maintain</b> — there's still a WebSocket under the hood, you just don't write the socket layer.
+          One row, shared by everyone. You write a new position; every subscriber's bug scurries there. <b style={{ color: "var(--ink)" }}>No socket code to write, no events to design, no reconnect logic to maintain</b> — there's still a WebSocket under the hood, you just don't write the socket layer. And notice what page you're reading: a static field guide that got multiplayer <i>by accident</i>, because realtime isn't a feature you add — it's what the database does.
         </p>
         <p style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 720, marginTop: 12 }}>
           How it works today: in the current alpha, a write causes the subscribed queries to re-run and pushes the fresh result to everyone watching. That's perfect at small scale — and it's exactly why state stays capped and why write-heavy apps need a little care.
@@ -606,7 +610,7 @@ const bug = useQuery("bug");        // one shared row — you write no socket co
       {/* 04 the stack — architecture explainer */}
       <Section id="stack" n="04" kicker="The shape" title="The whole stack, at a glance">
         <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
-          Here's how an app is actually put together, two ways — top to bottom: where the <b style={{ color: "var(--ink)" }}>frontend</b> is hosted, what the <b style={{ color: "var(--ink)" }}>backend</b> is made of, and who runs each piece. Start on <b style={{ color: "var(--ink)" }}>Conventional</b> — the way most apps are built today — then flip to <b style={{ color: "var(--ink)" }}>Lakebed</b> to watch it collapse.
+          Here's how an app is actually put together, two ways — top to bottom: where the <b style={{ color: "var(--ink)" }}>frontend</b> is hosted, what the <b style={{ color: "var(--ink)" }}>backend</b> is made of, and who runs each piece. Start on <b style={{ color: "var(--ink)" }}>Conventional</b> — the way most apps are built today — then flip to <b style={{ color: "var(--ink)" }}>Lakebed</b> to watch it collapse. You don't even need to read the labels — count the boxes. Every line between boxes is an integration you own and a place things break.
         </p>
         <div style={{ marginTop: 22 }}>
           <StackDiagram mode={stackMode} setMode={setStackMode} />
@@ -670,6 +674,9 @@ mutations: {
             </p>
           </div>
         </div>
+        <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 800, marginTop: 20 }}>
+          Why one roof matters, in three lines. <b style={{ color: "var(--ink)" }}>Nothing to wire:</b> sign-in is a runtime feature, not an SDK you integrate — no token juggling, no session-sync code. <b style={{ color: "var(--ink)" }}>The identity can't drift:</b> the system that authenticated the user is the same system running your query, so <code class="ic">ctx.auth.userId</code> is attested by the runtime itself — there's no vendor boundary for an expired or forged token to slip through. <b style={{ color: "var(--ink)" }}>Per-user data is one line:</b> filter by the caller's id and you're done — no policy layer to write.
+        </p>
       </Section>
 
       {/* 07 edges */}
@@ -680,7 +687,7 @@ mutations: {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 16, marginTop: 22 }}>
           {[
             ["~1 MB state / capsule", "Plenty for documents, rooms, and small collections today — the cap is expected to rise."],
-            ["no file storage yet", "No blob/image hosting. Workaround: stash a small image as a base64 data-URI in a string column — downscale + compress it under the ~64 KB-per-value cap (grayscale + few colors helps)."],
+            ["no file storage — yet", "Object storage is coming soon. Until then: stash a small image as a base64 data-URI in a string column — downscale + compress it under the ~64 KB-per-value cap (grayscale + few colors helps)."],
             ["server toolbox is lean", "Today the server runs your TypeScript + Lakebed primitives + Preact — no npm / node builtins yet."],
             ["5-second request cap", "Mutations and queries must be quick for now. No long jobs or streaming work."],
             ["no server-side loops", "while / unbounded for are blocked at build time today — use map / filter / find."],
@@ -701,7 +708,7 @@ mutations: {
       {/* 08 fit — project two, the showcase, at the very end */}
       <Section id="fit" n="08" kicker="Project two" title="Fit Furniture — a real one, end to end">
         <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
-          The ladybug proves the trick on one row. <b style={{ color: "var(--ink)" }}>Fit</b> is the same trick under real load — a multiplayer floor-plan tool we built as the proper stress-test of the reactive database. Drop a floor plan, drag furniture around a room to scale, and watch it move live for everyone in the room. It exercises every part of a capsule at once.
+          The ladybug was one shared <i>value</i>. <b style={{ color: "var(--ink)" }}>Fit</b> is a shared <i>document</i> — a whole model of a room, many objects, several people manipulating them at once. Same trick, real load: we built it as the proper stress-test of the reactive database. Drop a floor plan, drag furniture around a room to scale, and watch it move live for everyone in the room. It exercises every part of a capsule at once — even the floor-plan image lives as data in a row, because there's no file storage <i>yet</i> (Fit is literally the app that wants the object storage coming in <a class="lk-link" href="#edges">§07</a>).
         </p>
         <div style={{ marginTop: 24, maxWidth: 860, border: "1.5px solid var(--ink)", background: "var(--surface)", boxShadow: "6px 6px 0 var(--ink)" }}>
           {/* faux browser chrome */}
@@ -730,7 +737,7 @@ mutations: {
           </div>
         </div>
         <p style={{ fontSize: 14.5, color: "var(--muted)", marginTop: 18, maxWidth: 800 }}>
-          Fit is also where the one rough edge shows: today every drag reships the whole room to everyone subscribed, so it stays sharp at a few people per room. That's the <b style={{ color: "var(--ink)" }}>scoping</b> ask from the realtime section — a way to target a subscription at one room by id. The ergonomics are already here; per-room scoping is the upgrade that makes it scale, with no change to the app's code. Consider this the feature request.
+          Fit is also where the one honest edge shows. Right now a capsule's realtime is <b style={{ color: "var(--ink)" }}>all-or-nothing</b>: every connected browser hears about every write, whether it cares or not. <b style={{ color: "var(--ink)" }}>Scoping</b> means subscribing to just a slice — "only room 12," "only my rows" — so a write only wakes the people it affects. Without it, one capsule can't efficiently host many independent rooms: fine for one household arranging one living room, a ceiling for a multi-room product. It's expected to come, and no app code changes when it does. But it raises the right question: how would you host a thousand independent rooms <i>today</i>? That's <a class="lk-link" href="#draw">Draw ↓</a>.
         </p>
       </Section>
 
@@ -765,7 +772,42 @@ mutations: {
           </div>
         </div>
         <p style={{ fontSize: 14.5, color: "var(--muted)", marginTop: 18, maxWidth: 820 }}>
-          This is the part that makes the whole platform click. The thing we flagged as Fit's ceiling — one capsule holding many rooms and reshipping everyone's data to everyone — simply isn't a problem here, because <b style={{ color: "var(--ink)" }}>every board is its own capsule</b>: a self-contained program and database, dedicated to one board and the handful of people on it. The reactive database has all the headroom it needs when it's only ever serving a <i>single</i> app. And the spawn itself is kin to the <b style={{ color: "var(--ink)" }}>anonymous deploys</b> from the top of this page — each board is a throwaway capsule, generated from a stored one with no account, that cleans itself up after about a week. Getting a Lakebed capsule to launch another Lakebed capsule took some creative engineering — but the payoff is the cleanest version of the idea: the whole thing, front door and every board, runs on Lakebed.
+          This is where the word <b style={{ color: "var(--ink)" }}>capsule</b> becomes literal. When you click New board, the launcher doesn't call some backend's "create board" endpoint — it holds a complete whiteboard-shaped capsule, <i>the entire app, as data</i>, and hands it to Lakebed; Lakebed hands back a fresh URL. That URL is a brand-new, fully independent app with its own database, its own live socket, its own quotas. Three ideas land at once. <b style={{ color: "var(--ink)" }}>Apps as values:</b> creating an app is a data operation, not a provisioning event. <b style={{ color: "var(--ink)" }}>Anonymous deploys are a primitive, not just onboarding:</b> the no-account front door from the top of this page is cheap and safe enough that <i>software</i> uses it as an API. <b style={{ color: "var(--ink)" }}>Disposable software:</b> a board per meeting, per game night — it expires on its own unless someone claims it, and nobody cleans up. And Fit's ceiling simply isn't a problem here: every board is its own capsule, so the reactive database only ever serves a single board and the handful of people on it. Getting a Lakebed capsule to launch another Lakebed capsule took some creative engineering — but the payoff is the cleanest version of the idea: the whole thing, front door and every board, runs on Lakebed.
+        </p>
+      </Section>
+
+      {/* 10 lakebuild — project four, apps that build apps */}
+      <Section id="build" n="10" kicker="Project four" title="Lakebuild — a Lakebed app that builds Lakebed apps">
+        <p style={{ fontSize: 16.5, color: "var(--muted)", maxWidth: 800, marginTop: 0 }}>
+          Type a sentence — "an animated Connect Four," "a pomodoro timer with a progress ring" — and watch an app appear, then become real, then hand you a claim link. <a class="lk-link" href="https://lakebuild.lakebed.app" target="_blank" rel="noreferrer">lakebuild.lakebed.app</a> is itself a Lakebed capsule; an AI model writes the new app <i>as a capsule</i>; and it launches like any other. <b style={{ color: "var(--ink)" }}>Draw spawns copies of one fixed app. Lakebuild spawns apps that didn't exist a minute ago</b> — same primitive, one level up.
+        </p>
+        <div style={{ marginTop: 24, maxWidth: 860, border: "1.5px solid var(--ink)", background: "var(--surface)", boxShadow: "6px 6px 0 var(--ink)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", borderBottom: "1.5px solid var(--ink)", background: "var(--bg)" }}>
+            <span style={{ display: "flex", gap: 5 }}>{[0, 1, 2].map((d) => <span key={d} style={{ width: 10, height: 10, borderRadius: 999, border: "1.5px solid var(--ink)", background: d === 0 ? "var(--accent)" : "transparent" }} />)}</span>
+            <span class="mono" style={{ fontSize: 12, color: "var(--muted)" }}>lakebuild.lakebed.app</span>
+          </div>
+          <div style={{ padding: "20px 18px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {[
+                ["the API fits in a prompt", "the whole server model — tables, two column types, queries, mutations, the rules — fits in one prompt; a small, cheap model writes a complete, styled capsule on the first try, for about two cents"],
+                ["the walls talk back", "break a rule and the build rejects the code before deploy, with an exact, quotable error — the platform is its own guardrail, so an AI loop can self-correct"],
+                ["the last mile is trivial", "launching is one POST — “the model wrote code” to “there's a URL” is seconds, not a pipeline"],
+                ["disposable, then claimable", "what comes out is an anonymous capsule like Draw's boards — it expires on its own, or one click makes it yours for good"],
+              ].map(([h, b]) => (
+                <div key={h} style={{ flex: "1 1 230px", border: "1.5px solid var(--ink)", borderLeft: "5px solid var(--accent)", background: "var(--bg)", padding: "12px 14px" }}>
+                  <div class="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>{h}</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 5 }}>{b}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginTop: 20 }}>
+              <a class="cta" href="https://lakebuild.lakebed.app" target="_blank" rel="noreferrer">open lakebuild.lakebed.app →</a>
+              <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Describe an app; about ten seconds later it's live at its own URL.</span>
+            </div>
+          </div>
+        </div>
+        <p style={{ fontSize: 14.5, color: "var(--muted)", marginTop: 18, maxWidth: 820 }}>
+          This is what <b style={{ color: "var(--ink)" }}>"agent-native"</b> means when it's true instead of a tagline: not an SDK for agents, but a surface small enough for a model to hold in its head, one way to do things, and hard walls with loud errors. The code generation is one external AI step — the only part that leaves Lakebed. Everything you see, the builder and what it builds, is capsules all the way down.
         </p>
       </Section>
 
