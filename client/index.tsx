@@ -55,6 +55,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',
 .bug-wrap:hover .bug-inner{transform:scale(1.18)}
 ::selection{background:var(--accent);color:var(--ink)}
 ::-webkit-scrollbar{width:12px}::-webkit-scrollbar-thumb{background:var(--ink);border:3px solid var(--bg)}
+.two>*,.hero-grid>*{min-width:0}
 @media (max-width:760px){.nav-links{display:none!important}.hero-grid{grid-template-columns:1fr!important}.two{grid-template-columns:1fr!important}.h1{font-size:46px!important}}
 `;
 
