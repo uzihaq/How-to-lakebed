@@ -11,18 +11,18 @@ export default capsule({
     bug: table({ key: string(), x: string(), y: string() }),
   },
   queries: {
-    bug: query((ctx) => ctx.db.bug.all()),
+    bug: query(async (ctx) => ctx.db.bug.withIndex("by_creation").collect()),
   },
   mutations: {
-    move: mutation((ctx, to: string) => {
+    move: mutation(async (ctx, to: string) => {
       const p = JSON.parse(to || "{}");
       const i = String(Math.max(0, Math.round(Number(p.i) || 0)));   // section index
       const fx = Math.max(0.05, Math.min(0.95, Number(p.fx)));
       const fy = Math.max(0.05, Math.min(0.95, Number(p.fy)));
       const y = `${fx.toFixed(4)},${fy.toFixed(4)}`;
-      const row = ctx.db.bug.all().find((b) => b.key === "bug");
-      if (row) ctx.db.bug.update(row.id, { x: i, y });
-      else ctx.db.bug.insert({ key: "bug", x: i, y });
+      const row = (await ctx.db.bug.withIndex("by_creation").collect()).find((b) => b.key === "bug");
+      if (row) await ctx.db.bug.update(row.id, { x: i, y });
+      else await ctx.db.bug.insert({ key: "bug", x: i, y });
     }),
   },
 });
