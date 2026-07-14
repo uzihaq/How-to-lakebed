@@ -31,6 +31,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',
 .cta:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--ink)}
 .hardcard{background:var(--surface);border:1.5px solid var(--ink);box-shadow:5px 5px 0 var(--ink);transition:transform .15s ease,box-shadow .15s ease}
 .hardcard:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--ink)}
+.tbl-wrap{border:1.5px solid var(--ink);box-shadow:5px 5px 0 var(--ink);overflow-x:auto}
+.tbl{border-collapse:collapse;width:100%;font-size:13px}
+.tbl th{font-family:'Space Mono',monospace;text-align:left;background:rgba(22,21,15,.06);border:1.5px solid var(--ink);padding:8px 11px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.tbl td{border:1.5px solid rgba(22,21,15,.18);padding:8px 11px;color:var(--muted);vertical-align:top}
+.tbl td:first-child{color:var(--ink)}
 .code{border:1.5px solid var(--ink);box-shadow:6px 6px 0 var(--accent);background:#16150f}
 .code-bar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1.5px solid #2c2a20;background:#1c1a12}
 .code .dot{width:10px;height:10px;border-radius:50%;background:var(--accent)}
@@ -182,6 +187,17 @@ function Code({ file, code }: { file: string; code: string }) {
           return <div key={i} style={{ color: c ? "#8f9466" : "#e9e7da", whiteSpace: "pre" }}>{ln || " "}</div>;
         })}
       </code></pre>
+    </div>
+  );
+}
+
+function Tbl({ head, rows }: { head: string[]; rows: string[][] }) {
+  return (
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>{head.map((h) => <th key={h}>{h}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
+      </table>
     </div>
   );
 }
@@ -529,8 +545,17 @@ $ npx lakebed deploy
         <div style={{ marginTop: 18, maxWidth: 780, border: "1.5px solid var(--ink)", borderLeft: "5px solid var(--accent)", background: "var(--surface)", padding: "16px 18px" }}>
           <div class="mono" style={{ fontSize: 12.5, fontWeight: 700 }}>What an anonymous deploy can't do <span style={{ color: "var(--muted)", fontWeight: 400 }}>(until you claim it)</span></div>
           <p style={{ fontSize: 14.5, color: "var(--muted)", margin: "10px 0 0" }}>
-            The server runs as an interpreted subset, so keep it <b style={{ color: "var(--ink)" }}>synchronous</b> — no <code class="ic">async/await</code>, no outbound <code class="ic">fetch</code>, no secrets/<code class="ic">env</code>, no timers, no loops (use <code class="ic">map/filter/find</code>). Plus the usual capsule limits: ~1 MB state, no file storage, no npm, ~10k requests + 1k writes a day — and the deploy is <b style={{ color: "var(--ink)" }}>temporary, expiring after about a week</b>. <b style={{ color: "var(--ink)" }}>Claim it</b> (free, GitHub login) to keep the URL for good, run your real source bundle, and unlock async, outbound fetch, and secrets — env keys live in a <code class="ic">.env.lakebed.server</code> file that deploys with the capsule and shows up as <code class="ic">ctx.env</code> in your server code. (The CLI enforces the tier: define server env on an unclaimed capsule and the deploy refuses until you claim.)
+            The server runs as an interpreted subset, so keep it <b style={{ color: "var(--ink)" }}>synchronous</b> — no <code class="ic">async/await</code>, no outbound <code class="ic">fetch</code>, no secrets/<code class="ic">env</code>, no timers, no loops (use <code class="ic">map/filter/find</code>). Plus the usual capsule limits: ~1 MB state, no file storage, no npm, ~10k requests + 1k writes a day — and the deploy is <b style={{ color: "var(--ink)" }}>temporary, expiring after about a week</b>. <b style={{ color: "var(--ink)" }}>Claim it</b> (free, GitHub login) to keep the URL for good and add two server powers: outbound <code class="ic">fetch</code> and secrets — env keys live in a <code class="ic">.env.lakebed.server</code> file that deploys with the capsule and shows up as <code class="ic">ctx.env</code> in your server code. (The CLI enforces the tier: define server env on an unclaimed capsule and the deploy refuses until you claim.)
           </p>
+        </div>
+        <p style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 780, marginTop: 14 }}>Claiming isn't “now run any code” — both tiers run the same fenced server. It just adds two powers:</p>
+        <div style={{ maxWidth: 780, marginTop: 10 }}>
+          <Tbl head={["the server can…", "anonymous", "claimed"]} rows={[
+            ["read + write its own database", "✓", "✓"],
+            ["loops · timers · eval · node built-ins", "✗", "✗"],
+            ["make outbound fetch calls", "✗", "✓"],
+            ["hold secrets", "✗", "✓"],
+          ]} />
         </div>
       </Section>
 
@@ -703,9 +728,25 @@ mutations: {
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 26, padding: 18, border: "1.5px solid var(--ink)", background: "var(--accent)", boxShadow: "6px 6px 0 var(--ink)" }}>
-          <b class="mono">Reach for Lakebed when:</b>
-          <span> a multiplayer toy, a shared room, a live dashboard, a collaborative prototype — anything where "everyone sees it update" is the magic and the data stays small. And the ceiling keeps rising as it heads to GA.</span>
+        <div style={{ marginTop: 32, borderTop: "1.5px solid var(--ink)", paddingTop: 24 }}>
+          <div class="mono" style={{ fontSize: 13, fontWeight: 700 }}>Isolation &amp; where it's headed <span style={{ color: "var(--muted)", fontWeight: 400 }}>(we can't see the runtime — this is us reading tea leaves)</span></div>
+          <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 800, margin: "10px 0 14px" }}>Tenant isolation is really two problems, with very different difficulty:</p>
+          <Tbl head={["", "how it works", "hard?", "our read"]} rows={[
+            ["data", "you call ctx.db.* and Lakebed runs it, scoped to you", "easy", "solved"],
+            ["compute", "keep one capsule's running code away from another's", "hard", "a text-scan “fence” over a shared runtime — not a real sandbox yet"],
+          ]} />
+          <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 800, margin: "16px 0 14px" }}>That fence is a <i>literal</i> text search over your server — even a comment with a banned word like <code class="ic">async</code> fails the deploy. It's why there's no <code class="ic">while</code>, no timers, no node built-ins, no npm. Lifting any of it means running untrusted code, and there's a spectrum — trading safety, speed, and reach:</p>
+          <Tbl head={["approach", "runs", "speed", "to secure", "npm"]} rows={[
+            ["tiny IR (≈ today)", "db ops only", "fast", "~none", "✗"],
+            ["WASM / jitless", "real code", "slow", "small", "limited"],
+            ["hardened V8 isolate", "full JS", "fast", "large, battle-tested", "✓"],
+          ]} />
+          <p style={{ fontSize: 14.5, color: "var(--muted)", maxWidth: 800, margin: "16px 0 14px" }}>Which way does a platform like this grow? Two bets:</p>
+          <Tbl head={["direction", "the bet", "what would hint at it"]} rows={[
+            ["open — run any code", "a general runtime: full JS + npm, safely", "the pitch keeps getting broader — “build anything here”"],
+            ["opinionated — primitives + a safe exit", "batteries-included: rich first-party functions (db, auth, files, AI) that run for you, plus an optional slow sandbox for the rare custom code", "the database already works exactly this way"],
+          ]} />
+          <p style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 800, marginTop: 14, fontStyle: "italic" }}>Remains to be seen — and it's the most interesting question about where Lakebed lands.</p>
         </div>
       </Section>
 
